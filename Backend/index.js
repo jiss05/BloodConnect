@@ -12,6 +12,8 @@ const bodyParser = require('body-parser');
 
 
 const adminRoutes = require('./routes/v1/admin/admin');
+const endUserRoutes = require('./routes/v1/enduser/enduser');
+const hospitalRoutes = require('./routes/v1/hospitalstaff/hospitalstaff');
 
 
 
@@ -32,6 +34,8 @@ app.use(bodyParser.json({ limit: '150mb'}));
 
 
 app.use('/api/v1/admin',adminRoutes);
+app.use('/api/v1/enduser',endUserRoutes);
+app.use('/api/v1/hospitalstaff',hospitalRoutes);
 
 
 

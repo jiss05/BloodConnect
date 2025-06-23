@@ -17,7 +17,7 @@ const login_schema = new mongoose.Schema
 
     role : {
              type : String , 
-             enum :['admin','user','hotel_owner']
+             enum :['admin','user','hospital']
              },
              
 status : {type : Boolean,

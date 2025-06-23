@@ -54,5 +54,32 @@ module.exports = {
         return res.status(401).json({ status: false, message: "invalid token" });
     }
     next()
+  },
+
+
+
+   isHospitalStaff: async function (req, res, next) {
+    const token = req.headers['token'];
+    if (token) {
+      try {
+        const decoded = jwt.verify(token, '@this_is_secret_key');
+        const user = await login.findOne({ _id: decoded.id, status: true });
+        if (!user) {
+          return res.status(401).json({ status: false, message: 'Unauthorized' });
+        }
+        if (user.role !== 'hospital') {
+          return res.status(403).json({ status: false, message: 'Only hospital staff can access' });
+        }
+        req.user = user;
+      } catch (error) {
+        return res.status(401).json({ status: false, message: 'Unauthorized' });
+      }
+    } else {
+      return res.status(401).json({ status: false, message: 'Unauthorized' });
+    }
+    next();
   }
-}
+};
+
+
+
