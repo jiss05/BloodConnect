@@ -487,7 +487,7 @@ router.post('/requestblood', isUser, async(req,res)=>{
 
 
      //Generate pdf and return a downloadlink
-        generateBloodMatchPDF(donorsRaw, inventoryData, (err, filePath) => {
+        generateBloodMatchPDF(donorsRaw, inventoryData, async (err, filePath) => {
         if (err) {
             console.error('pdf generation failed', err);
             return res.status(500).json({
@@ -499,6 +499,31 @@ router.post('/requestblood', isUser, async(req,res)=>{
         const path = require('path');
         const fileName = path.basename(filePath);
         const downloadUrl = `${req.protocol}://${req.get('host')}/public/${fileName}`;
+
+        //email to the requester with pdf
+
+        const subject=' BloodConnect - Donor & Inventory Matches';
+        const htmlBody=
+         `
+        <p>Dear ${req.user.name},</p>
+        <p>Attached is the detailed PDF containing matching donors and hospital blood inventory for your request of <strong>${bloodGroup}</strong> (${unitsNeeded} units) at <strong>${hospitalName}</strong>, ${city}.</p>
+        <p>Thank you for using BloodConnect.</p>
+        <br>
+        <p>– Team BloodConnect</p>
+      `;
+
+      await sendEmail.sendTextEmail(
+        req.user.email,
+        subject,
+        htmlBody,
+        [{
+            filename:'Donor_Inventory_match.pdf',
+            path:filePath,
+            contentType:'application/pdf'
+
+        }] //pdf file attached here
+      );
+
         return res.status(200).json({
             status: true,
             message: 'Matching donors and hospital inventory fetched successfully',
