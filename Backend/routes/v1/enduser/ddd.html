@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Blood Request</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 40px;
+      background: #f8f9fa;
+    }
+
+    h2 {
+      color: #c0392b;
+    }
+
+    form {
+      background: #fff;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 0 10px #ccc;
+      margin-bottom: 30px;
+    }
+
+    label {
+      display: block;
+      margin: 12px 0 4px;
+      font-weight: bold;
+    }
+
+    input, select {
+      width: 100%;
+      padding: 10px;
+      margin-bottom: 10px;
+    }
+
+    button {
+      background-color: #c0392b;
+      color: white;
+      padding: 10px 20px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+
+    .results {
+      margin-top: 30px;
+    }
+
+    .card {
+      background: #fff;
+      padding: 15px;
+      margin: 10px 0;
+      border-left: 5px solid #c0392b;
+      box-shadow: 0 0 5px #ddd;
+    }
+
+    .section-title {
+      margin-top: 20px;
+      color: #2c3e50;
+    }
+  </style>
+</head>
+<body>
+
+  <h2>Request Blood</h2>
+
+  <form id="bloodRequestForm">
+    <label>Patient Name</label>
+    <input type="text" name="patientName" required>
+
+    <label>City</label>
+    <input type="text" name="city" required>
+
+    <label>Blood Group</label>
+    <select name="bloodGroup" required>
+      <option value="">Select</option>
+      <option>A+</option><option>A-</option>
+      <option>B+</option><option>B-</option>
+      <option>O+</option><option>O-</option>
+      <option>AB+</option><option>AB-</option>
+    </select>
+
+    <label>Units Needed</label>
+    <input type="number" name="unitsNeeded" min="1" required>
+
+    <label>Hospital Name</label>
+    <input type="text" name="hospitalName" required>
+
+    <button type="submit">Request</button>
+  </form>
+
+  <div class="results">
+    <h3 class="section-title">Matching Donors</h3>
+    <div id="donorResults"></div>
+
+    <h3 class="section-title">Matching Hospital Inventory</h3>
+    <div id="inventoryResults"></div>
+  </div>
+
+  <script>
+    document.getElementById('bloodRequestForm').addEventListener('submit', async function (e) {
+      e.preventDefault();
+      
+      const formData = new FormData(e.target);
+      const data = Object.fromEntries(formData.entries());
+
+      const response = await fetch('http://localhost:4000/api/v1/enduser/requestblood', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'token': 'YOUR_USER_TOKEN_HERE' // Replace with actual token
+        },
+        body: JSON.stringify(data)
+      });
+
+      const result = await response.json();
+
+      const donorDiv = document.getElementById('donorResults');
+      const inventoryDiv = document.getElementById('inventoryResults');
+
+      donorDiv.innerHTML = '';
+      inventoryDiv.innerHTML = '';
+
+      // Show donors
+      if (Array.isArray(result.data.donors)) {
+        if (result.data.donors.length === 0) {
+          donorDiv.innerHTML = '<p>No eligible donors found within 10km radius.</p>';
+        } else {
+          result.data.donors.forEach(d => {
+            donorDiv.innerHTML += `
+              <div class="card">
+                <strong>${d.name}</strong> (${d.gender}, ${d.age})<br>
+                Blood Group: ${d.bloodGroup}<br>
+                Contact: ${d.contactNumber}<br>
+                Type: ${d.donertype}<br>
+                City: ${d.city}
+              </div>`;
+          });
+        }
+      } else {
+        donorDiv.innerHTML = `<p>${result.data.donors}</p>`;
+      }
+
+      // Show inventory
+      if (Array.isArray(result.data.inventory)) {
+        if (result.data.inventory.length === 0) {
+          inventoryDiv.innerHTML = '<p>No matching blood inventory found within 10km radius.</p>';
+        } else {
+          result.data.inventory.forEach(i => {
+            inventoryDiv.innerHTML += `
+              <div class="card">
+                <strong>${i.hospitalName}</strong><br>
+                Blood Group: ${i.bloodGroup}<br>
+                Units: ${i.units || i.quantity}<br>
+                City: ${i.city}<br>
+                Added On: ${new Date(i.bloodAdded).toLocaleDateString()}
+              </div>`;
+          });
+        }
+      }
+    });
+  </script>
+
+</body>
+</html>

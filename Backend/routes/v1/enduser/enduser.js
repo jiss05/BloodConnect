@@ -16,6 +16,10 @@ const{Otp}= require('../../../models/otp');
 const sendEmail = require('../../../controllers/email');
 const {donation}= require('../../../models/doner');
 const {getCoordinatesFromCity} = require('../../../utils/geocode');
+const {bloodrequest}= require('../../../models/request');
+const {getCompatibleGroups} = require('../../../utils/bloodgroupmatch');
+const {BloodInventory }= require('../../../models/inventory');
+
 
 
 
@@ -335,6 +339,129 @@ const finalLastDonated = isFirstTimeDonor ? null : lastDonated;
     return res.status(500).json({ status: false, message: 'Internal server error' });
   }
 });
+
+
+//>>>>>>>>>>>>>>USER REQUSTING BLOOD >>>>>>>>>>>>>>>>>>>USER REQUSTING BLOOD >>>>>>>>>>>>>>>>>>>>>>>>>USER REQUSTING BLOOD >>>>>>>>>>>>>>>>>>>>USER REQUSTING BLOOD >>>>>>>>>>>>>>>USER REQUSTING BLOOD >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+
+
+router.post('/requestblood', isUser, async(req,res)=>{
+    try {
+
+        const { patientName,city,bloodGroup,unitsNeeded,hospitalName}=req.body;
+
+
+        if(!patientName||!city||!bloodGroup||!unitsNeeded||!hospitalName){
+            return res.status(400).json({status:false,message:'All fields are required'});
+        }
+
+
+        //bloodgroupvalidation
+        const validBloodGroup = ['A+', 'A-', 'B+', 'B-', 'O+', 'O-', 'AB+', 'AB-'];
+        if(!validBloodGroup.includes(bloodGroup)){
+            return res.status(400).json({status:false,message:'BLOOD GROUPS SHOULD BE A+, A-, B+, B-, O+, O-, AB+, AB-'});
+
+        }
+
+
+        
+        //get coordinates of city
+        const coordinates = await getCoordinatesFromCity(city);
+        if(!coordinates){
+            return res.status(400).json({status:false,message:'Invalid City'});
+
+        }
+        //get compatible blood groups
+        const compatibleGroups = getCompatibleGroups(bloodGroup);
+
+        // to check the eligliblity if it's been 90+ days since last donation.
+        const ninetyDaysAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
+
+        const donorsRaw = await donation.find({
+        bloodGroup: { $in: compatibleGroups },
+        available: true,
+        $or: [
+            { isFirstTimeDonor: true },
+            { lastDonated: { $lte: ninetyDaysAgo } }//checking here
+        ],
+        location: {
+            $near: {
+            $geometry: { type: 'Point', coordinates },
+            $maxDistance: 10000//find doners within 10kms 
+            }
+        }
+        }).select('name gender age bloodGroup contactNumber city lastDonated isFirstTimeDonor');
+
+        //adding tag to each doner 
+         let donors = [];
+
+    if (donorsRaw.length > 0) {
+      donors = donorsRaw.map(doner => ({
+        ...doner._doc,
+        donertype: doner.isFirstTimeDonor ? 'Not Donated Yet' : 'Regular donor'
+      }));
+    } else {
+      donors = 'No eligible donors found within 10km radius.';
+    }
+
+        // 5. Find matching hospital inventories
+    const inventory = await BloodInventory.find({
+
+      bloodGroup: { $in: compatibleGroups },
+      units: { $gte: unitsNeeded },
+      bloodAdded: { $gte: new Date(Date.now() - 42 * 24 * 60 * 60 * 1000) },
+      location: {
+        $near: {
+          $geometry: { type: 'Point', coordinates },
+          $maxDistance: 10000
+        }
+      }
+    }).select('hospitalName bloodGroup units city bloodAdded');
+
+    const inventoryData= inventory.length>0? inventory:[];
+    const inventoryMessage= inventory.length == 0? 'No matching blood inventory found within 10km radius.':null;
+
+    //saving the req to db
+    await bloodrequest.create({
+        requestedBy:req.user._id,
+        patientName,
+        hospitalName,
+        city,
+        bloodGroup,
+        unitsNeeded,
+        location:{
+            type: 'Point',
+            coordinates:coordinates
+        }
+    });
+     return res.status(200).json({
+      status: true,
+      message: 'Matching donors and hospital inventory fetched successfully',
+      data: {patientName,
+        requestedUnits: unitsNeeded,
+        hospitalName,
+        bloodGroup,
+        donors,
+        inventory:inventoryData,
+        inventoryMessage
+      }
+    });
+ 
+    } catch (error) {
+        console.log(error);
+        return res.status(500).json({ status: false, message: 'Internal server error' });
+
+
+
+        
+    }
+});
+
+
+
+
+
+
 
 
 

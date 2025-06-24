@@ -233,7 +233,70 @@ router.get('/donors/bygroup/:group', isHospitalStaff, async (req, res) => {
     return res.status(500).json({ status: false, message: 'Internal server error' });
   }
 });
+//update route
+router.patch('/inventory/:id', isHospitalStaff, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const updates = req.body;
 
+    // Only allow the hospital staff who created the record to update it
+    const inventoryItem = await BloodInventory.findById(id);
+    if (!inventoryItem) {
+      return res.status(404).json({ status: false, message: 'Inventory item not found' });
+    }
+
+    if (inventoryItem.createdBy.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ status: false, message: 'You are not authorized to update this entry' });
+    }
+
+    // Allow updating these fields only
+    const allowedFields = ['hospitalName', 'bloodGroup', 'units', 'city', 'bloodAdded'];
+    for (let key in updates) {
+      if (allowedFields.includes(key)) {
+        inventoryItem[key] = updates[key];
+      }
+    }
+
+    await inventoryItem.save();
+
+    return res.status(200).json({
+      status: true,
+      message: 'Inventory updated successfully',
+      data: inventoryItem
+    });
+  } catch (error) {
+    console.log(error);
+    return res.status(500).json({ status: false, message: 'Internal server error' });
+  }
+});
+
+
+
+//delete route
+
+router.delete('/inventory/:id',isHospitalStaff,async(req,res)=>{
+    try {
+        const inventoryId = req.params.id;
+
+        const deleted = await BloodInventory.findOneAndDelete({
+            _id: inventoryId,
+            createdBy: req.user._id //tomake sure only staff del data
+        });
+
+        if (!deleted){
+            return res.status(404).json({status:false, message:'Inventory not found or unauthorized'});
+
+        }
+
+        return res.status(200).json({status:true,message:'Inventory deleted successfully'});
+
+        
+    } catch (error) {
+        console.log(error);
+        return res.status(500).json({status:false,message:'Something went wrong'});
+        
+    }
+});
 
 
 
