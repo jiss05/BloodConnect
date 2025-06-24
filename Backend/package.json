@@ -15,6 +15,7 @@
     "cors": "^2.8.5",
     "express": "^5.1.0",
     "express-useragent": "^1.0.15",
+    "fs": "^0.0.1-security",
     "googleapis": "^150.0.1",
     "helmet": "^8.1.0",
     "jsonwebtoken": "^9.0.2",

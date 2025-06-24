@@ -5,6 +5,10 @@ const bloodInventorySchema = new mongoose.Schema({
     type: String,
     required: true
   },
+  contactNumber:{
+    type:Number,
+    required:true
+  },
   bloodGroup: {
     type: String,
     required: true,

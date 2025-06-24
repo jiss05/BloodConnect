@@ -19,6 +19,8 @@ const {getCoordinatesFromCity} = require('../../../utils/geocode');
 const {bloodrequest}= require('../../../models/request');
 const {getCompatibleGroups} = require('../../../utils/bloodgroupmatch');
 const {BloodInventory }= require('../../../models/inventory');
+const {emailBodyForDonor } = require('../../../utils/templates/emailtemplates');
+const generateBloodMatchPDF=require('../../../utils/generatePdf');
 
 
 
@@ -390,7 +392,10 @@ router.post('/requestblood', isUser, async(req,res)=>{
             $maxDistance: 10000//find doners within 10kms 
             }
         }
-        }).select('name gender age bloodGroup contactNumber city lastDonated isFirstTimeDonor');
+        })
+        .select('name gender age bloodGroup contactNumber city lastDonated isFirstTimeDonor')
+        .populate('loginId','email');
+        
 
         //adding tag to each doner 
          let donors = [];
@@ -416,7 +421,9 @@ router.post('/requestblood', isUser, async(req,res)=>{
           $maxDistance: 10000
         }
       }
-    }).select('hospitalName bloodGroup units city bloodAdded');
+    })
+    .select('hospitalName bloodGroup units city bloodAdded contactNumber')
+    .populate('createdBy','email name');
 
     const inventoryData= inventory.length>0? inventory:[];
     const inventoryMessage= inventory.length == 0? 'No matching blood inventory found within 10km radius.':null;
@@ -434,36 +441,103 @@ router.post('/requestblood', isUser, async(req,res)=>{
             coordinates:coordinates
         }
     });
-     return res.status(200).json({
-      status: true,
-      message: 'Matching donors and hospital inventory fetched successfully',
-      data: {patientName,
-        requestedUnits: unitsNeeded,
-        hospitalName,
-        bloodGroup,
-        donors,
-        inventory:inventoryData,
-        inventoryMessage
-      }
-    });
- 
-    } catch (error) {
-        console.log(error);
-        return res.status(500).json({ status: false, message: 'Internal server error' });
-
 
 
         
+        //NOTIFY DONERS
+        const requesterContact = req.user.phoneno;
+        for (const donor of donorsRaw) {
+        const donorEmail =donor?.loginId?.email;    
+        if (donorEmail) {
+            await sendEmail.sendTextEmail(
+            donorEmail,
+            "🩸 Blood Request Near You",
+            emailBodyForDonor({
+                name: donor.name,
+                patientName,
+                bloodGroup,
+                city,
+                contact: requesterContact
+            }),
+            []
+            );
+        }
+        }
+
+
+
+        // Notify hospitals
+        for (const inv of inventory) {
+        const hospitalEmail = inv?.createdBy?.email;
+        if (hospitalEmail) {
+            await sendEmail.sendTextEmail(
+            hospitalEmail,
+            "🩸 Blood Inventory Requested",
+            emailBodyForDonor({
+                name: inv?.createdBy.name,
+                patientName,
+                bloodGroup,
+                city,
+                contact: requesterContact
+            }),
+            []
+            );
+        }
+        }
+
+
+     //Generate pdf and return a downloadlink
+        generateBloodMatchPDF(donorsRaw, inventoryData, (err, filePath) => {
+        if (err) {
+            console.error('pdf generation failed', err);
+            return res.status(500).json({
+            status: false,
+            message: 'Internal server error while generating PDF'
+            });
+        }
+
+        const path = require('path');
+        const fileName = path.basename(filePath);
+        const downloadUrl = `${req.protocol}://${req.get('host')}/public/${fileName}`;
+        return res.status(200).json({
+            status: true,
+            message: 'Matching donors and hospital inventory fetched successfully',
+            data: {
+            patientName,
+            requestedUnits: unitsNeeded,
+            hospitalName,
+            bloodGroup,
+            donors,
+            inventory: inventoryData,
+            inventoryMessage,
+            pdfUrl: downloadUrl
+            }
+        });
+    });
+    }catch(error){
+        console.log(error)
+        res.status(500).json({status: false, message: 'Internal server error' })
+
     }
 });
 
 
+// get requestblood history
+router.get('/requestbloodhistory', isUser, async (req, res) => {
+  try {
+    const requests = await bloodrequest.find({ requestedBy: req.user._id })
+      .sort({ createdAt: -1 }); // newest first
 
-
-
-
-
-
+    return res.status(200).json({
+      status: true,
+      message: 'Your blood request history fetched successfully',
+      data: requests
+    });
+  } catch (err) {
+    console.error('Error fetching history:', err);
+    return res.status(500).json({ status: false, message: 'Internal server error' });
+  }
+});
 
 
 

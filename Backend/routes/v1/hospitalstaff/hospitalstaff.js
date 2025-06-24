@@ -148,9 +148,9 @@ router.post('/hospitalstafflogin', async (req, res) => {
 // hospital staff adds blood units to inventory
 router.post('/inventory/add', isHospitalStaff, async (req, res) => {
   try {
-    const { hospitalName, bloodGroup, units, city, bloodAdded } = req.body;
+    const { hospitalName, bloodGroup, units, city, bloodAdded,contactNumber } = req.body;
 
-    if (!hospitalName || !bloodGroup || !units || !city) {
+    if (!hospitalName || !bloodGroup || !units || !city||!contactNumber) {
       return res.status(400).json({ status: false, message: 'All required fields must be provided' });
     }
 
@@ -165,6 +165,7 @@ router.post('/inventory/add', isHospitalStaff, async (req, res) => {
       bloodGroup,
       units,
       city,
+      contactNumber,
       bloodAdded: bloodAdded || new Date(), // defaults to today if not given
       location: {
         type: 'Point',
@@ -250,7 +251,7 @@ router.patch('/inventory/:id', isHospitalStaff, async (req, res) => {
     }
 
     // Allow updating these fields only
-    const allowedFields = ['hospitalName', 'bloodGroup', 'units', 'city', 'bloodAdded'];
+    const allowedFields = ['hospitalName', 'bloodGroup', 'units', 'city', 'bloodAdded','contactNumber'];
     for (let key in updates) {
       if (allowedFields.includes(key)) {
         inventoryItem[key] = updates[key];

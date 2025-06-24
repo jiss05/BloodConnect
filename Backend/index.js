@@ -38,6 +38,9 @@ app.use('/api/v1/enduser',endUserRoutes);
 app.use('/api/v1/hospitalstaff',hospitalRoutes);
 
 
+app.use('/public',express.static(path.join(__dirname,'public')));
+
+
 
 
 
