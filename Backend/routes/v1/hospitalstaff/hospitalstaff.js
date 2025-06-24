@@ -18,6 +18,7 @@ const sendEmail = require('../../../controllers/email');
 const {BloodInventory} = require('../../../models/inventory');
 const {getCoordinatesFromCity} = require('../../../utils/geocode');
 const {donation}= require('../../../models/doner');
+const generateBloodMatchPDF=require('../../../utils/generatePdf');
 
 
 
@@ -223,12 +224,51 @@ router.get('/donors/bygroup/:group', isHospitalStaff, async (req, res) => {
 
     const donors = await donation.find({ bloodGroup: group })
       .select('name gender age bloodGroup contactNumber city lastDonated isFirstTimeDonor available isVerified createdAt');
+      
+      
+    if (!donors || donors.length === 0) {
+      return res.status(404).json({ status: false, message: `No donors found for ${group}` });
+    }
+
+    // Generate the PDF
+    generateBloodMatchPDF(donors, [], async (err, filePath) => {
+      if (err) {
+        console.error('PDF generation failed', err);
+        return res.status(500).json({ status: false, message: 'Failed to generate PDF' });
+      }
+
+      const path = require('path');
+      const fileName = path.basename(filePath);
+      const downloadUrl = `${req.protocol}://${req.get('host')}/public/${fileName}`;
+
+      // Send email to the logged-in hospital staff
+      const subject = `BloodConnect - ${group} Donors List`;
+      const htmlBody = `
+        <p>Dear ${req.user.name},</p>
+        <p>Attached is the detailed PDF list of all donors with blood group <strong>${group}</strong>.</p>
+        <p>You can also download it from: <a href="${downloadUrl}">${downloadUrl}</a></p>
+        <p>– Team BloodConnect</p>
+      `;
+
+      await sendEmail.sendTextEmail(
+        req.user.email,
+        subject,
+        htmlBody,
+        [{
+          filename: `${group}_Donors_List.pdf`,
+          path: filePath,
+          contentType: 'application/pdf'
+        }]
+      );
+
 
     return res.status(200).json({
       status: true,
-      message: `List of ${group} donors`,
+      message: `List of ${group} donors emailed successfully`,
+      downloadUrl,
       data: donors
     });
+  });
   } catch (error) {
     console.error('Error fetching donors by group:', error);
     return res.status(500).json({ status: false, message: 'Internal server error' });
