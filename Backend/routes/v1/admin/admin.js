@@ -9,6 +9,8 @@ const jwt = require('jsonwebtoken');
 const {login}=require('../../../models/login');
 const { Token } = require('../../../models/token');
 const{isAdmin}= require('../../../controllers/middleware');
+const { bloodrequest } = require('../../../models/request');
+const {BloodInventory} = require('../../../models/inventory');
 
 
 
@@ -226,7 +228,57 @@ router.put('/activateuser/:id',isAdmin, async(req,res)=>{
     
   }
 });
+//get all list of bloodrequest made by user
+router.post('/getrequestlist',isAdmin , async (req,res)=>{
+  try {
+    
 
+      const {city,bloodGroup,year,month}=req.body;
+
+
+      let filter={};
+
+      if(city){
+        filter.city=city.trim();
+      }
+
+      if(bloodGroup){
+        filter.bloodGroup = bloodGroup.trim().toUpperCase();
+      }
+        // Handle month/year filter if provided
+       if (year && month) {
+       const startDate = new Date(year, month - 1, 1); // start of month
+        const endDate = new Date(year, month, 0, 23, 59, 59); // end of month
+       filter.requestedAt = { $gte: startDate, $lte: endDate };
+     } else if (year) {
+       const startOfYear = new Date(year, 0, 1);
+          const endOfYear = new Date(year, 11, 31, 23, 59, 59);
+      filter.requestedAt = { $gte: startOfYear, $lte: endOfYear };
+     }
+
+     const bloodRequests = await  bloodrequest.find(filter)
+     .sort({requestedAt:-1})//to get latest req fst
+     .populate('requestedBy', 'name email phoneno role');//to populate user details
+     if(bloodRequests.length==0)//if no blood requests
+     {
+      return res.status(200).json({
+        status:true,
+        message:'No blood Request found',
+        data:[]
+      });
+     }
+      res.status(200).json({status:true,
+        message:'All blood requests fetched successfully',
+        count:bloodRequests.length,
+        data:bloodRequests
+      });
+    
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ status: false, message: 'Something went wrong' });
+    
+  }
+});
 
 
 
