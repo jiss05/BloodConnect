@@ -7,7 +7,7 @@ const login_schema = new mongoose.Schema
 
  password : {type : String} ,
  phoneno : {
-    type : Number
+    type : String
 
  },
  name : {

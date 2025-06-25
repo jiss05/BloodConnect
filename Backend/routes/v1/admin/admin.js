@@ -52,6 +52,11 @@ if (!allowedRoles.includes(role.toLowerCase())) {
     return res.status(400).json({ status: false, message: 'Role must be admin' });
 }
 
+const existingUser = await login.findOne({ email });
+if (existingUser) {
+      return res.status(400).json({ status: false, message: 'Email already registered' });
+    }
+
     
             
             
@@ -77,7 +82,7 @@ if (!allowedRoles.includes(role.toLowerCase())) {
 
         res.status(200).json({
             status: true,
-            message: 'User registered successfully',
+            message: 'Admin registered successfully',
             token: token
         });  
 
@@ -116,6 +121,11 @@ router.post('/login', async (req, res) => {
       return res.status(400).json({ status: false, message: 'Invalid password' });
     }
 
+    //Check role if only admin should be allowed to login
+    if (user.role !== 'admin') {
+      return res.status(403).json({ status: false, message: 'Access denied. Not an admin.' });
+    }
+
     // Generate token
     const token = jwt.sign(
       { id: user._id, role: user.role, email: user.email },
@@ -138,6 +148,86 @@ router.post('/login', async (req, res) => {
     res.status(500).json({ status: false, message: 'Something went wrong' });
   }
 });
+
+
+
+
+// get all the users..>/admin/users?role=donor&search=john
+router.get('/users', isAdmin, async (req, res) => {
+  try {
+    const { role, search } = req.query;
+
+    let query = {};
+
+    if (role) {
+      query.role = role.toLowerCase(); // filter by role: 'admin', 'user', 'hospitalstaff'
+    }
+
+    if (search) {
+      query.$or = [
+        { name: { $regex: search, $options: 'i' } },
+        { email: { $regex: search, $options: 'i' } },
+        { phoneno: { $regex: search, $options: 'i' } }
+      ];
+    }
+
+    const users = await login.find(query).select('-password -__v');
+
+    res.status(200).json({
+      status: true,
+      message: 'Users fetched successfully',
+      count: users.length,
+      data: users
+    });
+
+  } catch (error) {
+    console.error('Admin Fetch Users Error:', error);
+    res.status(500).json({ status: false, message: 'Internal server error' });
+  }
+});
+
+// deactivate users
+
+router.put('/deactivateuser/:id', isAdmin , async(req,res)=>{
+  try {
+    const userId = req.params.id;
+    const user = await login.findById(userId);
+    if (!user) {
+            return res.status(404).json({ status: false, message: 'User not found' });
+        }
+     user.status=false;
+     await user.save();
+     res.status(200).json({ status: true, message: 'User deactivated successfully' });
+
+    
+  } catch (error) {
+    console.log(error)
+    return res.status(500).json({status:false,message:'Something Went Wrong'});
+    
+  }
+});
+
+router.put('/activateuser/:id',isAdmin, async(req,res)=>{
+  try {
+    const userId=req.params.id;
+    const user = await login.findById(userId);
+    if(!user){
+      return res.status(404).json({ status: false, message: 'User not found' });
+
+    }
+    user.status=true;
+    await user.save();
+    res.status(200).json({status:true,message:'User activated successfully'});
+    
+  } catch (error) {
+    console.log(error)
+    return res.status(500).json({status:false,message:'Something Went Wrong'});
+
+    
+  }
+});
+
+
 
 
 
