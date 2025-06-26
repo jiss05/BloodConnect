@@ -341,6 +341,34 @@ router.get('/inventories', isAdmin, async (req, res) => {
   }
 });
 
+//delete user
+router.put('/deleteuser/:id', isAdmin, async (req, res) => {
+  try {
+    const userId = req.params.id;
+
+    const user = await login.findById(userId);
+    if (!user) {
+      return res.status(404).json({ status: false, message: 'User not found' });
+    }
+
+    if (user.isDeleted) {
+      return res.status(400).json({ status: false, message: 'User is already deleted' });
+    }
+    await login.findByIdAndUpdate(userId,{
+    isDeleted : true,//soft deleting
+    deletedAt : new Date()//deleting date
+    });
+    
+
+    res.status(200).json({ status: true, message: 'User deleted successfully' });
+
+  } catch (error) {
+    console.error('Soft Delete Error:', error);
+    res.status(500).json({ status: false, message: 'Internal server error' });
+  }
+});
+
+
 
 
 

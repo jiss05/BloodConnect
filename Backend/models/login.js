@@ -26,7 +26,14 @@ status : {type : Boolean,
 isverified : {
             type : Boolean,
             default : false
-          }
+          },
+isDeleted:{
+   type:Boolean,
+   default:fale
+},   
+deletedAt:{
+   type:Date
+}       
                                           
 
  });
