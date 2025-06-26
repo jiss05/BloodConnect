@@ -147,25 +147,23 @@ router.post('/hospitalstafflogin', async (req, res) => {
 });
 
 
-// hospital staff adds blood units to inventory
+// hospital staff adds or updates blood units to inventory
 router.post('/inventory/add', isHospitalStaff, async (req, res) => {
   try {
-    const { hospitalName, bloodgroups, units, city,contactNumber } = req.body;
+    const { hospitalName, bloodgroups, city, contactNumber } = req.body;
 
-    if (!hospitalName || !bloodgroups || !Array.isArray(bloodgroups)|| bloodgroups.length==0 ||!city||!contactNumber) {
+    if (!hospitalName || !bloodgroups || !Array.isArray(bloodgroups) || bloodgroups.length === 0 || !city || !contactNumber) {
       return res.status(400).json({ status: false, message: 'All required fields must be provided' });
     }
 
-    //validate each entry inside bloodgroups(array)
-    const validBloodGroups =['A+', 'A-', 'B+', 'B-', 'O+', 'O-', 'AB+','AB-'];
-      for(let group of bloodgroups){
-        if(!group.bloodGroup || !validBloodGroups.includes(group.bloodGroup)){
-          return res.status(400).json({ status: false, message: `Invalid blood group: ${group.bloodGroup}`
-           });
-
-        }
-     // default date if blood added date is not given
-      if(!group.bloodAdded){
+    //  Validate each blood group entry:
+    const validBloodGroups = ['A+', 'A-', 'B+', 'B-', 'O+', 'O-', 'AB+', 'AB-'];
+    for (let group of bloodgroups) {
+      if (!group.bloodGroup || !validBloodGroups.includes(group.bloodGroup)) {
+        return res.status(400).json({ status: false, message: `Invalid blood group: ${group.bloodGroup}` });
+      }
+      // Add today's date if not provided
+      if (!group.bloodAdded) {
         group.bloodAdded = new Date();
       }
     }
@@ -176,32 +174,67 @@ router.post('/inventory/add', isHospitalStaff, async (req, res) => {
       return res.status(400).json({ status: false, message: 'Invalid city name' });
     }
 
-    const newInventory = new BloodInventory({
+    // check if an inventory entry already exists
+    let existingInventory = await BloodInventory.findOne({
       hospitalName,
-      bloodgroups,
       city,
-      contactNumber,
-      location: {
-        type: 'Point',
-        coordinates: coordinates
-      },
       createdBy: req.user._id
     });
 
-    await newInventory.save();
+    if (existingInventory) {
+      // if exists, merge or update bloodgroups
+      for (let newGroup of bloodgroups) {
+        const existingGroup = existingInventory.bloodgroups.find(bg => bg.bloodGroup === newGroup.bloodGroup);
+        if (existingGroup) {
+          // If already exists, update units and date
+          existingGroup.units += newGroup.units;
+          existingGroup.bloodAdded = new Date(newGroup.bloodAdded || Date.now());
+        } else {
+          // If not exists, add new group entry
+          existingInventory.bloodgroups.push({
+            bloodGroup: newGroup.bloodGroup,
+            units: newGroup.units,
+            bloodAdded: new Date(newGroup.bloodAdded || Date.now())
+          });
+        }
+      }
 
-    return res.status(201).json({
-      status: true,
-      message: 'Blood inventory added successfully',
-      data: newInventory
-    });
+      await existingInventory.save();
+
+      return res.status(200).json({
+        status: true,
+        message: 'Existing inventory updated successfully',
+        data: existingInventory
+      });
+
+    } else {
+      // if not exists, create new entry
+      const newInventory = new BloodInventory({
+        hospitalName,
+        bloodgroups,
+        city,
+        contactNumber,
+        location: {
+          type: 'Point',
+          coordinates
+        },
+        createdBy: req.user._id
+      });
+
+      await newInventory.save();
+
+      return res.status(201).json({
+        status: true,
+        message: 'New blood inventory created successfully',
+        data: newInventory
+      });
+    }
 
   } catch (error) {
     console.log(error);
     return res.status(500).json({ status: false, message: 'Internal Server Error' });
   }
 });
-
 
 
 
@@ -287,53 +320,57 @@ router.get('/donors/bygroup/:group', isHospitalStaff, async (req, res) => {
     return res.status(500).json({ status: false, message: 'Internal server error' });
   }
 });
-//update route
-router.patch('/inventory/:id', isHospitalStaff, async (req, res) => {
+
+
+// adds a new blood group entry to existing inventory document
+router.patch('/inventory/:id/add-bloodgroup', isHospitalStaff, async (req, res) => {
   try {
     const { id } = req.params;
-    const updates = req.body;
+    const { bloodGroup, units, bloodAdded } = req.body;
 
-    // Only allow the hospital staff who created the record to update it
-    const inventoryItem = await BloodInventory.findById(id);
-    if (!inventoryItem) {
-      return res.status(404).json({ status: false, message: 'Inventory item not found' });
+    // Validation
+    const validGroups = ['A+', 'A-', 'B+', 'B-', 'O+', 'O-', 'AB+', 'AB-'];
+    if (!bloodGroup || !units) {
+      return res.status(400).json({ status: false, message: 'Blood group and units are required' });
     }
 
-    if (inventoryItem.createdBy.toString() !== req.user._id.toString()) {
-      return res.status(403).json({ status: false, message: 'You are not authorized to update this entry' });
+    if (!validGroups.includes(bloodGroup)) {
+      return res.status(400).json({ status: false, message: 'Invalid blood group provided' });
     }
 
-    // Allow updating these fields only
-    const allowedFields = ['bloodgroups', 'contactNumber'];
-    for (let key in updates) {
-      if (allowedFields.includes(key)) {
-        //handle bloodgrps updates 
-        if(key==='bloodgroups'&& Array.isArray(updates.bloodgroups)){
-          //update fields
-          inventoryItem.bloodgroups=updates.bloodgroups.map(group=>({
-            bloodGroup:group.bloodGroup,
-            units:group.units,
-            bloodAdded:group.bloodAdded || new Date()//to get curret date if not given
+    const inventory = await BloodInventory.findById(id);
+    if (!inventory) {
+      return res.status(404).json({ status: false, message: 'Inventory document not found' });
+    }
 
+    // Authorization check
+    if (inventory.createdBy.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ status: false, message: 'Unauthorized to update this inventory' });
+    }
 
-          }));
-        }else{
-          inventoryItem[key] = updates[key];
-          
-        }
-        }
-        
-      }
+    // Check for duplicate blood group
+    const alreadyExists = inventory.bloodgroups.find(bg => bg.bloodGroup === bloodGroup);
+    if (alreadyExists) {
+      return res.status(409).json({ status: false, message: `Blood group ${bloodGroup} already exists. Use update route instead.` });
+    }
 
-    await inventoryItem.save();
+    // Add new group
+    inventory.bloodgroups.push({
+      bloodGroup,
+      units,
+      bloodAdded: bloodAdded || new Date()
+    });
+
+    await inventory.save();
 
     return res.status(200).json({
       status: true,
-      message: 'Inventory updated successfully',
-      data: inventoryItem
+      message: `Blood group ${bloodGroup} added successfully to inventory`,
+      data: inventory
     });
+
   } catch (error) {
-    console.log(error);
+    console.error('Error adding blood group:', error.message);
     return res.status(500).json({ status: false, message: 'Internal server error' });
   }
 });
@@ -341,8 +378,7 @@ router.patch('/inventory/:id', isHospitalStaff, async (req, res) => {
 
 
 
-
-// Update a specific blood group entry in the inventory (partial update)
+// Update a specific blood group entry in the inventory
 router.patch('/inventory/:id/bloodgroup/:group', isHospitalStaff, async (req, res) => {
   try {
     const { id, group } = req.params; // inventory id and bloodGroup name (e.g., B+)
@@ -390,6 +426,41 @@ router.patch('/inventory/:id/bloodgroup/:group', isHospitalStaff, async (req, re
   }
 });
 
+//update contact number
+router.patch('/inventory/:id/contact', isHospitalStaff, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { contactNumber } = req.body;
+
+    if (!contactNumber) {
+      return res.status(400).json({ status: false, message: 'Contact number is required' });
+    }
+
+    const inventory = await BloodInventory.findById(id);
+    if (!inventory) {
+      return res.status(404).json({ status: false, message: 'Inventory not found' });
+    }
+
+    // Ensure only the hospital staff who created the entry can update
+    if (inventory.createdBy.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ status: false, message: 'Unauthorized update attempt' });
+    }
+
+    inventory.contactNumber = contactNumber;
+    await inventory.save();
+
+    return res.status(200).json({
+      status: true,
+      message: 'Contact number updated successfully'
+    });
+
+  } catch (error) {
+    console.error('Contact update error:', error.message);
+    return res.status(500).json({ status: false, message: 'Internal server error' });
+  }
+});
+
+
 
 
 
@@ -417,6 +488,44 @@ router.delete('/inventory/:id',isHospitalStaff,async(req,res)=>{
         return res.status(500).json({status:false,message:'Something went wrong'});
         
     }
+});
+// Delete a specific blood group from inventory
+router.delete('/inventory/:id/bloodgroup/:group', isHospitalStaff, async (req, res) => {
+  try {
+    const { id, group } = req.params;
+
+    // Find the inventory document by ID
+    const inventory = await BloodInventory.findById(id);
+    if (!inventory) {
+      return res.status(404).json({ status: false, message: 'Inventory document not found' });
+    }
+
+    // Check ownership
+    if (inventory.createdBy.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ status: false, message: 'You are not authorized to update this inventory' });
+    }
+
+    // Filter out the group to be deleted
+    const initialLength = inventory.bloodgroups.length;
+    inventory.bloodgroups = inventory.bloodgroups.filter(bg => bg.bloodGroup !== group.toUpperCase());
+
+    // If no change, the group didn't exist
+    if (inventory.bloodgroups.length === initialLength) {
+      return res.status(404).json({ status: false, message: `Blood group ${group} not found in inventory` });
+    }
+
+    await inventory.save();
+
+    return res.status(200).json({
+      status: true,
+      message: `Blood group ${group} deleted successfully`,
+      data: inventory
+    });
+
+  } catch (error) {
+    console.error('Delete blood group error:', error);
+    return res.status(500).json({ status: false, message: 'Internal server error' });
+  }
 });
 
 
