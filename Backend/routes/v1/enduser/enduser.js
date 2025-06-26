@@ -409,20 +409,23 @@ router.post('/requestblood', isUser, async(req,res)=>{
       donors = 'No eligible donors found within 10km radius.';
     }
 
-        // 5. Find matching hospital inventories
+    //  Find matching hospital inventories
     const inventory = await BloodInventory.find({
-
-      bloodGroup: { $in: compatibleGroups },
-      units: { $gte: unitsNeeded },
-      bloodAdded: { $gte: new Date(Date.now() - 42 * 24 * 60 * 60 * 1000) },
-      location: {
-        $near: {
-          $geometry: { type: 'Point', coordinates },
-          $maxDistance: 10000
-        }
-      }
-    })
-    .select('hospitalName bloodGroup units city bloodAdded contactNumber')
+     bloodgroups: {
+         $elemMatch: {
+           bloodGroup: { $in: compatibleGroups },
+           units: { $gte: unitsNeeded },
+           bloodAdded: { $gte: new Date(Date.now() - 42 * 24 * 60 * 60 * 1000) }
+    }
+  },
+    location: {
+      $near: {
+        $geometry: { type: 'Point', coordinates },
+        $maxDistance: 10000
+    }
+  }
+})
+    .select('hospitalName bloodgroups city contactNumber')
     .populate('createdBy','email name');
 
     const inventoryData= inventory.length>0? inventory:[];

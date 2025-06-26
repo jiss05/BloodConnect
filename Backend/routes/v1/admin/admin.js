@@ -3,6 +3,7 @@ const router=express();
 
 const bcrypt =require('bcrypt') 
 const jwt = require('jsonwebtoken');
+const path = require('path');
 
 
 
@@ -11,6 +12,8 @@ const { Token } = require('../../../models/token');
 const{isAdmin}= require('../../../controllers/middleware');
 const { bloodrequest } = require('../../../models/request');
 const {BloodInventory} = require('../../../models/inventory');
+const generateBloodRequestPDF=require('../../../utils/generatebloodrequestpdf');
+const generateInventoryListPDF = require('../../../utils/generateinventorylistpdf');
 
 
 
@@ -267,16 +270,74 @@ router.post('/getrequestlist',isAdmin , async (req,res)=>{
         data:[]
       });
      }
+
+      //generate pdf
+
+      generateBloodRequestPDF(bloodRequests,(error, filePath)=>{
+        if(error){
+        console.log(err);
+        return res.status(500).json({ status: false, message: 'PDF generation failed' });
+        }
+        const fileName = require('path').basename(filePath);
+        const downloadUrl = `${req.protocol}://${req.get('host')}/public/${fileName}`;
+
+
+      
+
+
       res.status(200).json({status:true,
         message:'All blood requests fetched successfully',
         count:bloodRequests.length,
-        data:bloodRequests
+        data:bloodRequests,
+        pdfUrl:downloadUrl
+      });
       });
     
   } catch (error) {
     console.log(error);
     res.status(500).json({ status: false, message: 'Something went wrong' });
     
+  }
+});
+
+// get all blood inventories 
+router.get('/inventories', isAdmin, async (req, res) => {
+  try {
+    const inventories = await BloodInventory.find()
+      .sort({ createdAt: -1 }) // latest first
+      .populate('createdBy', 'name email'); // hospital staff details
+
+    if (inventories.length === 0) {
+      return res.status(200).json({
+        status: true,
+        message: 'No blood inventory records found',
+        data: []
+      });
+    }
+
+    generateInventoryListPDF(inventories,async(error,filePath)=>{
+      if(error){
+        console.log(error);
+        return res.status(500).json({ status: false, message: 'Failed to generate PDF' });
+
+      }
+
+      const fileName = path.basename(filePath);
+      const downloadUrl = `${req.protocol}://${req.get('host')}/public/${fileName}`;
+
+    
+
+    res.status(200).json({
+      status: true,
+      message: 'All blood inventory records fetched successfully',
+      count: inventories.length,
+      data: inventories,
+      downloadUrl
+    });
+  });
+  } catch (error) {
+    console.error('Error fetching inventories:', error);
+    res.status(500).json({ status: false, message: 'Internal server error' });
   }
 });
 

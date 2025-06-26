@@ -29,15 +29,18 @@ function generateBloodMatchPDF(donors = [], inventory = [], callback) {
   ];
 
   const inventoryTableBody = [
-    ['Hospital Name', 'Blood Group', 'Units', 'City', 'Contact'],
-    ...inventory.map(i => [
+  ['Hospital Name', 'Blood Group', 'Units', 'City', 'Contact'],
+  ...inventory.flatMap(i =>
+    i.bloodgroups.map(bg => [
       i.hospitalName,
-      i.bloodGroup,
-      String(i.units),
+      bg.bloodGroup,
+      String(bg.units),
       i.city,
       i.contactNumber
     ])
-  ];
+  )
+];
+
 
   const docDefinition = {
     content: [
