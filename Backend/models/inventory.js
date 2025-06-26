@@ -9,7 +9,9 @@ const bloodInventorySchema = new mongoose.Schema({
     type:Number,
     required:true
   },
-  bloodGroup: {
+  bloodgroups:[
+    {
+    bloodGroup: {
     type: String,
     required: true,
     enum: ['A+', 'A-', 'B+', 'B-', 'O+', 'O-', 'AB+', 'AB-']
@@ -19,6 +21,13 @@ const bloodInventorySchema = new mongoose.Schema({
     required: true,
     min: 1
   },
+   bloodAdded: {
+    type: Date,
+    required:true // This is what you'll use to calculate the 42-day expiry
+  }
+}
+  ],
+
   city: {
     type: String,
     required: true
@@ -33,10 +42,6 @@ const bloodInventorySchema = new mongoose.Schema({
       type: [Number], // [longitude, latitude]
       required: true
     }
-  },
-  bloodAdded: {
-    type: Date,
-    required:true // This is what you'll use to calculate the 42-day expiry
   },
   createdBy: {
     type: mongoose.Schema.Types.ObjectId,

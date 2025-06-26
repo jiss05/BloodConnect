@@ -149,11 +149,20 @@ router.post('/hospitalstafflogin', async (req, res) => {
 // hospital staff adds blood units to inventory
 router.post('/inventory/add', isHospitalStaff, async (req, res) => {
   try {
-    const { hospitalName, bloodGroup, units, city, bloodAdded,contactNumber } = req.body;
+    const { hospitalName, bloodgroups, units, city,contactNumber } = req.body;
 
-    if (!hospitalName || !bloodGroup || !units || !city||!contactNumber) {
+    if (!hospitalName || !bloodgroups || !Array.isArray(bloodgroups)|| bloodgroups.length==0 ||!city||!contactNumber) {
       return res.status(400).json({ status: false, message: 'All required fields must be provided' });
     }
+
+    //validate each entry inside bloodgroups(array)
+    const validBloodGroups =['A+', 'A-', 'B+', 'B-', 'O+', 'O-', 'AB+'];
+      for(let group of bloodgroups){
+        if(!group.bloodGroup || !validBloodGroups.includes(group.bloodGroup)){
+          return res.status(400).json({ status: false, message: `Invalid blood group: ${group.bloodGroup}` });
+
+        }
+      }
 
     // Convert city to coordinates
     const coordinates = await getCoordinatesFromCity(city);
@@ -163,7 +172,7 @@ router.post('/inventory/add', isHospitalStaff, async (req, res) => {
 
     const newInventory = new BloodInventory({
       hospitalName,
-      bloodGroup,
+      bloodgroups,
       units,
       city,
       contactNumber,
