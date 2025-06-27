@@ -231,6 +231,112 @@ router.post('/logout', async (req, res) => {
 
 
 
+router.post('/forgotpassword', async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({ status: false, message: 'Email is required' });
+    }
+
+    const user = await usermodel.findOne({ email });
+    if (!user) {
+      return res.status(404).json({ status: false, message: 'No account associated with this email' });
+    }
+
+    const otp = Math.floor(100000 + Math.random() * 900000);
+
+    // clear old OTPs 
+    await Otp.deleteMany({ email });
+
+    // Save OTP
+    await Otp.create({
+      Loginid: user._id,
+      otp,
+      email,
+      expiresAt: new Date(Date.now() + 5 * 60 * 1000)
+    });
+
+    // Email
+    const subject = `BloodConnect - Password Reset OTP`;
+    const htmlBody = `
+      <p>Hi ${user.name},</p>
+      <p>Your OTP to reset your password is: <strong>${otp}</strong></p>
+      <p>This OTP will expire in 5 minutes. Do not share it with anyone.</p>
+      <p>If you did not request this, you can safely ignore this email.</p>
+    `;
+
+    await sendEmail.sendTextEmail(email, subject, htmlBody);
+
+    return res.status(200).json({ status: true, message: 'OTP has been sent to your registered email.' });
+
+  } catch (error) {
+    console.error('Forgot Password Error:', error);
+    return res.status(500).json({ status: false, message: 'Something went wrong, please try again.' });
+  }
+});
+
+//verify otp
+router.post('/verify-otp', async (req, res) => {
+  const { email, otp } = req.body;
+
+  const record = await Otp.findOne({ email, otp });
+  if (!record) {
+    return res.status(400).json({ status: false, message: 'Invalid or expired OTP' });
+  }
+
+  await Otp.deleteMany({ email }); // clear used OTP
+
+  const verifiedToken = jwt.sign(
+    { email, purpose: 'reset-password' },
+    JWT_SECRET,
+    { expiresIn: '10m' }
+  );
+
+  return res.status(200).json({
+    status: true,
+    message: 'OTP verified successfully',
+    verifiedToken
+  });
+});
+
+
+//reset password
+
+router.post('/reset-password', async (req, res) => {
+  const { verifiedToken, newPassword, confirmNewPassword } = req.body;
+
+  if ( !newPassword || !confirmNewPassword) {
+    return res.status(400).json({ status: false, message: 'All fields are required' });
+  }
+
+  if (newPassword !== confirmNewPassword) {
+    return res.status(400).json({ status: false, message: 'Passwords do not match' });
+  }
+
+  const decoded = jwt.verify(verifiedToken, JWT_SECRET);
+
+  if (decoded.purpose !== 'reset-password') {
+    return res.status(403).json({ status: false, message: 'Invalid token purpose' });
+  }
+
+  const user = await usermodel.findOne({ email: decoded.email });
+  if (!user) {
+    return res.status(404).json({ status: false, message: 'User not found' });
+  }
+
+  const hashedPassword = await bcrypt.hash(newPassword, 10);
+  user.password = hashedPassword;
+  await user.save();
+
+  return res.status(200).json({ status: true, message: 'Password reset successfully' });
+});
+
+
+
+
+
+
 //doner route>>>>>>>>>
 
 
