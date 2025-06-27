@@ -29,7 +29,7 @@ isverified : {
           },
 isDeleted:{
    type:Boolean,
-   default:fale
+   default:false
 },   
 deletedAt:{
    type:Date

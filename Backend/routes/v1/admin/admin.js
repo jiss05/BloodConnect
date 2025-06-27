@@ -211,7 +211,7 @@ router.put('/deactivateuser/:id', isAdmin , async(req,res)=>{
     
   }
 });
-
+//activate users
 router.put('/activateuser/:id',isAdmin, async(req,res)=>{
   try {
     const userId=req.params.id;
@@ -367,6 +367,69 @@ router.put('/deleteuser/:id', isAdmin, async (req, res) => {
     res.status(500).json({ status: false, message: 'Internal server error' });
   }
 });
+
+// get all inventories by city
+
+router.post('/inventoriesbycity', isAdmin, async (req, res) => {
+  try {
+    const { city } = req.body;
+
+    if (!city) {
+      return res.status(400).json({
+        status: false,
+        message: 'City is required'
+      });
+    }
+
+    const inventories = await BloodInventory.find({ city: city.trim() })
+      .select('hospitalName city contactNumber bloodgroups createdAt')
+      .populate('createdBy', 'name email');
+
+    if (inventories.length === 0) {
+      return res.status(200).json({
+        status: true,
+        message: `No inventories found in ${city}`,
+        data: []
+      });
+    }
+
+    res.status(200).json({
+      status: true,
+      message: `Inventories in ${city} fetched successfully`,
+      count: inventories.length,
+      data: inventories
+    });
+
+  } catch (error) {
+    console.error('Error fetching inventories by city:', error.message);
+    res.status(500).json({ status: false, message: 'Internal server error' });
+  }
+});
+
+
+//admin logout
+router.post('/logout', isAdmin, async (req, res) => {
+  try {
+    const token = req.headers['token'];
+
+    if (!token) {
+      return res.status(400).json({ status: false, message: 'Token is required' });
+    }
+
+    // Remove the token from DB
+    await Token.findOneAndDelete({ token });
+
+    res.status(200).json({
+      status: true,
+      message: 'Logout successful'
+    });
+
+  } catch (error) {
+    console.error('Logout Error:', error);
+    res.status(500).json({ status: false, message: 'Internal server error' });
+  }
+});
+
 
 
 
