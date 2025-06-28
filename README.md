@@ -128,6 +128,17 @@ Each inventory is geotagged using OpenStreetMap (Nominatim API) to support locat
 
 ---
 
+## 📍 Blood Request Matching
+
+- Location of hospital and donors are matched within a **10 km radius**
+- `utils/bloodMatcher.js` provides blood compatibility logic
+- Matching results include:
+  - Donors within 10 km
+  - Hospital inventories within 10 km
+- A PDF report is generated with the matches and emailed
+
+---
+
 ## 🌐 API Base URL
 
 http://localhost:4000/api/v1
@@ -182,16 +193,7 @@ http://localhost:4000/api/v1
 
 ---
 
-## 📍 Blood Request Matching
 
-- Location of hospital and donors are matched within a **10 km radius**
-- `utils/bloodMatcher.js` provides blood compatibility logic
-- Matching results include:
-  - Donors within 10 km
-  - Hospital inventories within 10 km
-- A PDF report is generated with the matches and emailed
-
----
 
 ## 📦 Setup Instructions
 
