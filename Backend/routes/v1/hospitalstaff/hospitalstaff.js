@@ -7,7 +7,7 @@ const mongoose=require('mongoose');
 const bcrypt =require('bcrypt') 
 const jwt = require('jsonwebtoken');
 const pdf = require('pdfmake');
-
+const path = require('path');
 
 
 const {login}=require('../../../models/login');
@@ -19,7 +19,8 @@ const {BloodInventory} = require('../../../models/inventory');
 const {getCoordinatesFromCity} = require('../../../utils/geocode');
 const {donation}= require('../../../models/doner');
 const generateBloodMatchPDF=require('../../../utils/generatePdf');
-const { group } = require('console');
+const { group, error } = require('console');
+const generateInventoryListPDF=require('../../../utils/generateinventorylistpdf');
 
 
 
@@ -357,6 +358,49 @@ router.post('/inventory/add', isHospitalStaff, async (req, res) => {
     return res.status(500).json({ status: false, message: 'Internal Server Error' });
   }
 });
+
+
+//get all registered inventories
+router.get('/getinventorylist', isHospitalStaff, async (req, res) => {
+  try {
+    const inventories = await BloodInventory.find({
+      createdBy: { $ne: req.user._id }//used to exclude the hospitalstaff who is searching
+    })
+      .select('-__v') //  exclude version in front
+      .populate('createdBy', 'name email'); //show who created it
+
+    if (!inventories || inventories.length === 0) {
+      return res.status(404).json({ status: false, message: 'No other inventories found' });
+    }
+
+    generateInventoryListPDF(inventories,(error,filePath)=>{
+      if(error){
+        console.log(error);
+        return res.status(500).json({ status: false, message: 'Failed to generate PDF' });
+
+      }
+      const path = require('path');
+      const fileName = path.basename(filePath);
+      const downloadUrl = `${req.protocol}://${req.get('host')}/public/${fileName}`;
+
+    
+
+    return res.status(200).json({
+      status: true,
+      message: 'Inventories fetched successfully',
+      downloadUrl,
+      count:inventories.length,
+      data: inventories
+      
+    });
+    });
+
+  } catch (error) {
+    console.error('Error fetching inventories:', error);
+    return res.status(500).json({ status: false, message: 'Internal server error' });
+  }
+});
+
 
 
 

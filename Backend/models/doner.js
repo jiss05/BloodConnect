@@ -77,7 +77,7 @@ isFirstTimeDonor: {
   }
 });
 
-// Enable geospatial search
+// enable geospatial search
 donorSchema.index({ location: '2dsphere' });
 
 const donation = mongoose.model('donation',donorSchema);

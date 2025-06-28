@@ -1,3 +1,4 @@
+
 const express=require('express')
 const router=express();
 
@@ -362,6 +363,11 @@ if (!isFirstTimeDonor && !lastDonated) {
   return res.status(400).json({ status: false, message: 'Please provide last donated date for repeat donors' });
 }
 
+const existingDoner = await donation.findOne({loginId:req.user._id});
+if(existingDoner){
+  return res.status(400).json({ status: false, message: 'You have already registered as a donor.' });
+}
+
 const finalLastDonated = isFirstTimeDonor ? null : lastDonated;
 
 
@@ -447,6 +453,58 @@ const finalLastDonated = isFirstTimeDonor ? null : lastDonated;
     return res.status(500).json({ status: false, message: 'Internal server error' });
   }
 });
+
+
+
+router.put('/donor/update', isUser, async (req, res) => {
+  try {
+    const {
+      contactNumber,
+      city,
+      lastDonated,
+      isFirstTimeDonor
+    } = req.body;
+
+    const donor = await donation.findOne({ loginId: req.user._id });
+    if (!donor) {
+      return res.status(404).json({ status: false, message: 'Donor not found' });
+    }
+
+    // Optional: Validate contact number
+    if (contactNumber && !/^\d{10}$/.test(contactNumber)) {
+      return res.status(400).json({ status: false, message: 'Contact number must be 10 digits' });
+    }
+
+    // Update fields if provided
+    if (contactNumber) donor.contactNumber = contactNumber;
+    if (typeof isFirstTimeDonor === 'boolean') {
+      donor.isFirstTimeDonor = isFirstTimeDonor;
+      donor.lastDonated = isFirstTimeDonor ? null : lastDonated || donor.lastDonated;
+    }
+
+    if (city && city !== donor.city) {
+      const coordinates = await getCoordinatesFromCity(city);
+      if (!coordinates) {
+        return res.status(400).json({ status: false, message: 'Invalid city name' });
+      }
+      donor.city = city;
+      donor.location = { type: 'Point', coordinates };
+    }
+
+    await donor.save();
+
+    return res.status(200).json({
+      status: true,
+      message: 'Donor details updated successfully',
+      donor
+    });
+
+  } catch (error) {
+    console.log(error);
+    return res.status(500).json({ status: false, message: 'Something went wrong' });
+  }
+});
+
 
 
 //>>>>>>>>>>>>>>USER REQUSTING BLOOD >>>>>>>>>>>>>>>>>>>USER REQUSTING BLOOD >>>>>>>>>>>>>>>>>>>>>>>>>USER REQUSTING BLOOD >>>>>>>>>>>>>>>>>>>>USER REQUSTING BLOOD >>>>>>>>>>>>>>>USER REQUSTING BLOOD >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
