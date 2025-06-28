@@ -75,7 +75,7 @@ Backend
 │   ├── generateInventoryListPDF.js   # Generates inventory PDF  
 │   ├── generatePdf.js                # Blood match PDF (donor + hospital)  
 │   ├── geocode.js                    # City-to-coordinates converter  
-│   └── sms.js                        # Optional SMS notification utility  
+│   
 │  
 ├── .env                              # Environment variables (JWT secret, Gmail creds)  
 ├── .gitignore  
